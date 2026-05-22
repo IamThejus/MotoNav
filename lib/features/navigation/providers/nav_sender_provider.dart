@@ -39,9 +39,18 @@ final navSenderProvider = Provider<void>((ref) {
     if (!bleState.isConnected) return;
 
     // Read updated state after updateProgress
-    final updated = ref.read(routeProvider);
+    final updated     = ref.read(routeProvider);
     final currentStep = updated.currentStep;
-    final nextStep = updated.nextStep;
+    final nextStep    = updated.nextStep;
+    final route       = updated.route!;
+
+    // ETA = remaining fraction of total duration, recalculated every GPS tick
+    final etaMinutes = route.distanceMeters > 0
+        ? ((updated.remainingDistanceMeters / route.distanceMeters) *
+                route.durationMs /
+                60000)
+            .round()
+        : 0;
 
     final packet = PacketBuilder.buildTurnPacket(
       currentSign: currentStep?.sign ?? 0,
@@ -49,13 +58,14 @@ final navSenderProvider = Provider<void>((ref) {
       remainingDistanceMeters: updated.remainingDistanceMeters,
       nextSign: nextStep?.sign ?? 0,
       speedKmh: mapState.speedKmh,
+      etaMinutes: etaMinutes,
     );
 
     appLogger.d(
       'NAV turn: step=${updated.currentStepIndex} '
       'sign=${currentStep?.sign} dist=${updated.distanceToTurnMeters}m '
       'remaining=${(updated.remainingDistanceMeters / 1000).toStringAsFixed(1)}km '
-      'next=${nextStep?.sign} spd=${mapState.speedKmh.round()}',
+      'eta=${etaMinutes}min next=${nextStep?.sign} spd=${mapState.speedKmh.round()}',
     );
 
     ref.read(bleProvider.notifier).writePacket(packet);

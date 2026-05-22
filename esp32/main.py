@@ -15,6 +15,7 @@ import bluetooth
 import struct
 import time
 import sys
+import math
 import gc9a01
 from machine import Pin, SPI
 
@@ -63,9 +64,9 @@ R_STATUS    = (0,   4,  240, 24)   # BLE dot · speed · GPS dot
 R_BAR       = (30,  32, 180,  7)   # countdown bar (distance-to-turn)
 R_ARROW     = (40,  44, 160, 104)  # large arrow bitmap
 R_DIVIDER   = (30, 152, 180,  2)
-R_TURN_DIST = (20, 157, 200, 44)   # "250 m" / "1.2 km"
+R_TURN_DIST = (10, 157, 220, 44)   # left: dist  |  right: ETA
 R_NEXT      = (10, 204,  60, 34)   # small next-turn arrow
-R_TRIP      = (75, 206, 160, 30)   # "22.3 km" remaining
+R_TRIP      = (75, 204, 155, 26)   # remaining km (safe zone)
 
 # Arrow bitmap anchor
 _AX, _AY = 120, 96   # centre of R_ARROW
@@ -74,12 +75,13 @@ _AX, _AY = 120, 96   # centre of R_ARROW
 # UI state — single source of truth
 # ─────────────────────────────────────────────────────────────────────────
 ui = {
-    'sign':   0,
-    'dist_m': 0,
-    'rem_m':  0,
-    'speed':  0,
-    'nxt':    0,
-    'conn':   False,
+    'sign':    0,
+    'dist_m':  0,
+    'rem_m':   0,
+    'speed':   0,
+    'nxt':     0,
+    'eta_min': 0,
+    'conn':    False,
 }
 _prev = {}   # last rendered snapshot — drives partial update decisions
 
@@ -152,16 +154,26 @@ def draw_arrow():
 
 def draw_turn_dist():
     _clr(R_TURN_DIST)
-    ry = R_TURN_DIST[1]
-    m  = ui['dist_m']
-    # Vertical centre of region for font_large (32px tall)
-    ty = ry + (R_TURN_DIST[3] - font_large.HEIGHT) // 2
+    ry      = R_TURN_DIST[1]
+    rh      = R_TURN_DIST[3]
+    m       = ui['dist_m']
+    ty_lg   = ry + (rh - font_large.HEIGHT) // 2   # vertical centre for large font
+    ty_sm   = ry + (rh - font_small.HEIGHT) // 2   # vertical centre for small font
+
+    # Left half (x 10..120): turn distance in large font, right-aligned to centre
     if m < 1000:
-        s = '{} m'.format(m)
+        s_dist = '{} m'.format(m)
     else:
         km10 = round(m / 100)
-        s = '{}.{} km'.format(km10 // 10, km10 % 10)
-    _text_c(font_large, s, CX, ty, WHITE)
+        s_dist = '{}.{} km'.format(km10 // 10, km10 % 10)
+    _text_c(font_large, s_dist, 85, ty_lg, WHITE)   # centred at x=55
+
+    # Vertical separator at centre
+    tft.fill_rect(125, ry + 8, 1, rh - 16, GREY) #CX
+
+    # Right half (x 120..230): ETA in small font
+    s_eta = '{} min'.format(ui['eta_min'])
+    _text_c(font_small, s_eta, 175, ty_sm, LGREY)   # centred at x=175
 
 
 def draw_next():
@@ -170,11 +182,11 @@ def draw_next():
 
 
 def draw_trip():
-    # rem_m is already in km (decoded as km units from packet)
     _clr(R_TRIP)
-    s  = '{} km'.format(ui['rem_m'])
-    ty = R_TRIP[1] + (R_TRIP[3] - font_small.HEIGHT) // 2
-    _text_c(font_small, s, R_TRIP[0] + R_TRIP[2] // 2, ty, LGREY)
+    ty  = R_TRIP[1] + (R_TRIP[3] - font_small.HEIGHT) // 2
+    cx  = R_TRIP[0] + R_TRIP[2] // 2   # centre of region (x≈152)
+    s_rem = '{} km'.format(ui['rem_m'])
+    _text_c(font_small, s_rem, cx, ty, LGREY)
 
 
 def draw_divider():
@@ -212,9 +224,10 @@ def render_updates():
     speed_changed  = _prev.get('speed')!= ui['speed']
 
     # Coarsen remaining-distance redraws to 100 m buckets
-    prev_bucket    = _prev.get('rem_m', 0)   # already km, bucket = 1 km
-    curr_bucket    = ui['rem_m']
-    trip_changed   = prev_bucket != curr_bucket
+    prev_bucket  = _prev.get('rem_m', 0)
+    curr_bucket  = ui['rem_m']
+    trip_changed = prev_bucket != curr_bucket or \
+                   _prev.get('eta_min', 0) != ui['eta_min']
 
     # Detect 100 m threshold crossing for pulse ring
     was_close  = _prev.get('dist_m', 999) >= 100
@@ -243,17 +256,102 @@ def render_updates():
     _prev.update(ui)
 
 # ─────────────────────────────────────────────────────────────────────────
-# Waiting screen — shown before first packet
+# Boot animation helpers
+# ─────────────────────────────────────────────────────────────────────────
+
+def _arc(cx, cy, r, a0, a1, color):
+    """Draw a 2px-thick arc from a0 to a1 degrees (0° = 3 o'clock, CW)."""
+    steps = max(8, abs(int(a1 - a0)))
+    ra = math.radians(a0)
+    px = int(cx + r * math.cos(ra))
+    py = int(cy + r * math.sin(ra))
+    px2 = int(cx + (r + 1) * math.cos(ra))
+    py2 = int(cy + (r + 1) * math.sin(ra))
+    for i in range(1, steps + 1):
+        a  = math.radians(a0 + (a1 - a0) * i / steps)
+        nx  = int(cx + r       * math.cos(a))
+        ny  = int(cy + r       * math.sin(a))
+        nx2 = int(cx + (r + 1) * math.cos(a))
+        ny2 = int(cy + (r + 1) * math.sin(a))
+        tft.line(px,  py,  nx,  ny,  color)
+        tft.line(px2, py2, nx2, ny2, color)
+        px, py, px2, py2 = nx, ny, nx2, ny2
+
+
+def _chevron(y_top, y_bot, half_w, arm_w, color, step=2):
+    """Scanline-fill a V/chevron (pointing up). step=0 skips animation delay."""
+    span = y_bot - y_top or 1
+    half = arm_w // 2
+    for y in range(y_top, y_bot + 1):
+        t  = (y - y_top) / span
+        lx = int(CX - t * half_w)
+        rx = int(CX + t * half_w)
+        ll, lr = max(0, lx - half), lx + half
+        rl, rr = rx - half, min(239, rx + half)
+        if lr >= rl:                          # arms merge near peak
+            tft.fill_rect(ll, y, rr - ll, 1, color)
+        else:
+            tft.fill_rect(ll, y, lr - ll, 1, color)
+            tft.fill_rect(rl, y, rr - rl, 1, color)
+        if step > 0 and (y - y_top) % step == 0:
+            time.sleep_ms(1)
+
+
+# Dashed ring geometry — 5 × 60° segments with 12° gaps = 360°
+_RING_SEGS = [(-90, -30), (-18, 42), (54, 114), (126, 186), (198, 258)]
+
+_first_boot = True   # boot animation plays once only
+
+# ─────────────────────────────────────────────────────────────────────────
+# Waiting / boot screen
+#   First call  → full animated boot sequence (~2 s)
+#   Later calls → instant static redraw (BLE reconnect wait)
 # ─────────────────────────────────────────────────────────────────────────
 def draw_waiting():
+    global _first_boot
     tft.fill(BLACK)
-    # "M" logo
-    tft.line(CX-22, CY-12, CX-22, CY+12, GREY)
-    tft.line(CX-22, CY-12, CX,    CY+6,  GREY)
-    tft.line(CX,    CY+6,  CX+22, CY-12, GREY)
-    tft.line(CX+22, CY-12, CX+22, CY+12, GREY)
-    for i in range(3):
-        tft.fill_rect(CX-10+i*10, CY+28, 5, 5, GREY)
+
+    if _first_boot:
+        _first_boot = False
+        time.sleep_ms(60)
+
+        # 1 — outer dashed ring sweeps in segment by segment
+        for a0, a1 in _RING_SEGS:
+            _arc(CX, CY, 103, a0, a1, YELLOW)
+            time.sleep_ms(75)
+
+        # 2 — inner ring completes in one pass
+        _arc(CX, CY, 90, -90, 270, YELLOW)
+        time.sleep_ms(60)
+
+        # 3 — large upper chevron: peak (120,42) → base ±52 px wide at y=130
+        _chevron(42, 130, 52, 11, YELLOW, step=2)
+
+        # 4 — small lower chevron: peak (120,102) → base ±38 px wide at y=164
+        _chevron(102, 164, 38, 9, YELLOW, step=3)
+        time.sleep_ms(120)
+
+        # 5 — logo text
+        _text_c(font_small, 'MotoNav', CX, 178, YELLOW)
+        time.sleep_ms(200)
+
+        # 6 — "READY" blinks twice then stays on
+        for _ in range(2):
+            _text_c(font_small, 'READY', CX, 204, WHITE)
+            time.sleep_ms(180)
+            _text_c(font_small, 'READY', CX, 204, DGREY)
+            time.sleep_ms(180)
+        _text_c(font_small, 'READY', CX, 204, WHITE)
+
+    else:
+        # Instant static redraw — no animation, shows reconnect state
+        for a0, a1 in _RING_SEGS:
+            _arc(CX, CY, 103, a0, a1, YELLOW)
+        _arc(CX, CY, 90, -90, 270, YELLOW)
+        _chevron(42, 130, 52, 11, YELLOW, step=0)
+        _chevron(102, 164, 38, 9, YELLOW, step=0)
+        _text_c(font_small, 'MotoNav', CX, 178, YELLOW)
+        _text_c(font_small, 'WAITING', CX, 204, LGREY)
 
 # ─────────────────────────────────────────────────────────────────────────
 # BLE
@@ -274,10 +372,11 @@ def _irq(event, data):
     global _pkt
     if event == _IRQ_CONNECT:
         ui['conn'] = True
-        led.value(1); time.sleep_ms(300); led.value(0)
+        led.value(1)          # stays on while connected — no sleep inside IRQ
         print('BLE connected')
     elif event == _IRQ_DISCONNECT:
         ui['conn'] = False
+        led.value(0)
         print('BLE disconnected')
         try: ble.gap_advertise(100_000, adv_data=_adv)
         except: pass
@@ -322,12 +421,13 @@ while True:
         pkt = _pkt
         _pkt = None
 
-        if pkt is not None and len(pkt) >= 9 and pkt[0] == 0x54 and pkt[1] == 0x4E:
-            ui['sign']   = pkt[2] - 10
-            ui['dist_m'] = struct.unpack_from('>H', pkt, 3)[0] * 10   # ×10 m units
-            ui['rem_m']  = struct.unpack_from('>H', pkt, 5)[0]        # km units
-            ui['nxt']    = pkt[7] - 10
-            ui['speed']  = pkt[8]
+        if pkt is not None and len(pkt) >= 11 and pkt[0] == 0x54 and pkt[1] == 0x4E:
+            ui['sign']    = pkt[2] - 10
+            ui['dist_m']  = struct.unpack_from('>H', pkt, 3)[0] * 10  # ×10 m units
+            ui['rem_m']   = struct.unpack_from('>H', pkt, 5)[0]       # km units
+            ui['nxt']     = pkt[7] - 10
+            ui['speed']   = pkt[8]
+            ui['eta_min'] = struct.unpack_from('>H', pkt, 9)[0]       # minutes
 
             if not _ready:
                 draw_all()       # one full draw, never again
@@ -356,3 +456,4 @@ while True:
         time.sleep_ms(200)
 
     time.sleep_ms(10)
+

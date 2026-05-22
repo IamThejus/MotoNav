@@ -24,11 +24,8 @@ class BleService {
       autoConnect: false,
     );
 
-    // Request larger MTU so packets up to ~512 bytes fit in one write
-    try {
-      await device.requestMtu(512);
-    } catch (_) {}
-
+    // TN packets are 11 bytes — default 20-byte BLE payload is sufficient.
+    // Requesting a large MTU crashes MicroPython's BLE stack on the ESP32-C3.
     final services = await device.discoverServices();
     for (final service in services) {
       if (_uuidMatch(service.uuid.str, AppConstants.bleServiceUuid)) {
