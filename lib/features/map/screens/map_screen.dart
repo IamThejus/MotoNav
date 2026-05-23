@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/config/api_config.dart';
@@ -9,6 +10,7 @@ import '../../../features/ble/providers/ble_provider.dart';
 import '../../../features/ble/screens/ble_screen.dart';
 import '../../../features/navigation/providers/nav_sender_provider.dart';
 import '../../../features/navigation/providers/routing_provider.dart';
+import '../../../features/offline_maps/screens/download_region_screen.dart';
 import '../data/nominatim_service.dart';
 import '../models/map_state.dart';
 import '../providers/map_provider.dart';
@@ -30,6 +32,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
   bool _userPannedAway = false;
   LatLng? _lastCenteredLocation;
   AnimationController? _moveAnim;
+
+  // Created once; TileLayer disposes it when removed from the tree.
+  late final _offlineTileProvider =
+      FMTCStore('offline').getTileProvider();
 
   @override
   void dispose() {
@@ -109,6 +115,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
     if (location != null) {
       _animateTo(location);
     }
+  }
+
+  void _openDownloadScreen() {
+    final center = ref.read(mapProvider).userLocation ??
+        AppConstants.fallbackLocation;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DownloadRegionScreen(initialCenter: center),
+      ),
+    );
   }
 
   @override
@@ -192,6 +208,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         ),
                       ),
                       const Spacer(),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.download_for_offline_rounded,
+                          color: AppTheme.onSurfaceMuted,
+                          size: 22,
+                        ),
+                        onPressed: _openDownloadScreen,
+                        tooltip: 'Download area for offline use',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 10),
                       BleStatusChip(
                         connectionState: switch (bleState.status) {
                           BleStatus.connected => BleConnectionState.connected,
@@ -306,10 +334,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
         backgroundColor: AppTheme.surface,
       ),
       children: [
-        // OSM tile layer
+        // Tile layer — FMTC serves cached tiles offline, falls back to network
         TileLayer(
           urlTemplate: ApiConfig.osmTileUrl,
           userAgentPackageName: 'com.thejus.motonav',
+          tileProvider: _offlineTileProvider,
           tileBuilder: _darkTileBuilder,
           errorTileCallback: (tile, error, stackTrace) {},
         ),

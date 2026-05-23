@@ -2,7 +2,39 @@
 
 A motorcycle navigation companion app for Android that sends turn-by-turn instructions to an ESP32-C3 microcontroller with a GC9A01 240×240 circular display over BLE.
 
-The phone handles all the heavy work — GPS, routing, search — and sends compact 9-byte packets to the display. No maps rendered on device, vector data only.
+The phone handles all the heavy work — GPS, routing, search — and sends compact 11-byte packets to the display. No maps rendered on device, vector data only.
+
+---
+
+## Screenshots
+
+### App
+
+<table>
+  <tr>
+    <td align="center"><img src="motonav_assets/v1/splash_screen.jpeg" width="180"/><br/><sub>Splash Screen</sub></td>
+    <td align="center"><img src="motonav_assets/v1/loading_screen.jpeg" width="180"/><br/><sub>Loading</sub></td>
+    <td align="center"><img src="motonav_assets/v1/search_screen.jpeg" width="180"/><br/><sub>Search</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="motonav_assets/v1/destination_loc_screen.jpeg" width="180"/><br/><sub>Destination</sub></td>
+    <td align="center"><img src="motonav_assets/v1/nav_route_screen.jpeg" width="180"/><br/><sub>Navigation Route</sub></td>
+    <td align="center"><img src="motonav_assets/v1/esp32_ble_connection_screen.jpeg" width="180"/><br/><sub>BLE Connection</sub></td>
+  </tr>
+</table>
+
+### ESP32 GC9A01 Display
+
+<table>
+  <tr>
+    <td align="center"><img src="motonav_assets/v1/esp32_loading.jpeg" width="220"/><br/><sub>Boot Screen</sub></td>
+    <td align="center"><img src="motonav_assets/v1/esp32_route.jpeg" width="220"/><br/><sub>Turn-by-Turn View</sub></td>
+  </tr>
+</table>
+
+**Boot animation:**
+
+<video src="motonav_assets/v1/esp32_loading_vid.mp4" controls width="320"></video>
 
 ---
 
@@ -26,6 +58,7 @@ The phone handles all the heavy work — GPS, routing, search — and sends comp
 - BLE auto-reconnect to named device
 - Place search powered by native geocoding (Google on Android)
 - Routing via OSRM (free, no API key required)
+- Offline map area download with tile caching (FMTC)
 - Partial screen redraw — only changed regions update, no flicker
 
 ---
@@ -38,6 +71,7 @@ The phone handles all the heavy work — GPS, routing, search — and sends comp
 | State | Riverpod (StateNotifier) |
 | Map | flutter_map + OSM tiles |
 | Routing | OSRM (free, no key) |
+| Offline Maps | flutter_map_tile_caching (FMTC) |
 | Search | package:geocoding (Google backend) |
 | GPS | geolocator |
 | BLE | flutter_blue_plus |
@@ -54,6 +88,7 @@ lib/                        Flutter app
     map/                    Map screen, search, GPS
     navigation/             Routing, step tracking, BLE packet sender
     ble/                    BLE scan, connect, auto-reconnect
+    offline_maps/           Area download screen
 
 esp32/
   main.py                   ESP32-C3 firmware (Tripper-style UI)
@@ -124,19 +159,20 @@ No API keys required. OSRM routing uses the public demo server.
 
 ## BLE Packet Format
 
-9 bytes, header `TN` (0x54 0x4E):
+11 bytes, header `TN` (0x54 0x4E):
 
 ```
 [0]     'T'
 [1]     'N'
 [2]     current turn sign + 10  (uint8)
-[3..4]  distance to turn  (uint16 BE, x10 m units, max 655 km)
-[5..6]  remaining distance (uint16 BE, km units, max 65535 km)
+[3..4]  distance to turn  (uint16 BE, x10 m units)
+[5..6]  remaining distance (uint16 BE, km units)
 [7]     next turn sign + 10  (uint8)
 [8]     speed km/h  (uint8)
+[9..10] ETA minutes  (uint16 BE)
 ```
 
-Sign values: `-3` sharp left · `-2` left · `-1` slight left · `0` straight · `1` slight right · `2` right · `3` sharp right · `4` arrive
+Sign values: `-4` U-turn · `-3` sharp left · `-2` left · `-1` slight left · `0` straight · `1` slight right · `2` right · `3` sharp right · `4` arrive · `6` roundabout
 
 ---
 
