@@ -1,3 +1,9 @@
+<div align="center">
+  <img src="motonav_assets/Banner.png" alt="MotoNav Banner" width="100%"/>
+</div>
+
+---
+
 # MotoNav
 
 A motorcycle navigation companion app for Android that sends turn-by-turn instructions to an ESP32-C3 microcontroller with a GC9A01 240×240 circular display over BLE.
