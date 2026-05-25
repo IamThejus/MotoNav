@@ -29,6 +29,9 @@ linux/flutter/ephemeral/
 macos/Flutter/ephemeral/
 windows/flutter/ephemeral/
 
+# Remove Claude
+CLAUDE.md
+
 # Logs
 *.log
 
