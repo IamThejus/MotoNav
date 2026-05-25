@@ -1,0 +1,69 @@
+name: motonav
+description: Motorcycle navigation companion for ESP32 BLE display.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Map
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Location
+  geolocator: ^11.0.0
+  geocoding: ^3.0.0
+  flutter_compass: ^0.8.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Networking
+  dio: ^5.4.3
+  retrofit: ^4.1.0
+
+  # BLE (included now, used in Phase 3)
+  flutter_blue_plus: ^1.32.12
+
+  # Background service (used in Phase 6)
+  flutter_background_service: ^5.0.5
+
+  # Routing polylines
+  flutter_polyline_points: ^2.0.1
+
+  # Offline map tile caching + download
+  flutter_map_tile_caching: ^9.0.1
+
+  # Storage
+  shared_preferences: ^2.3.2
+
+  # Utils
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+  equatable: ^2.0.5
+  logger: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.4.0
+  retrofit_generator: ^8.1.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/

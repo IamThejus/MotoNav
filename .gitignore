@@ -1,0 +1,40 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter generated
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android
+android/.gradle/
+android/app/build/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+
+# Mac/Linux/Windows builds
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment files
+.env

@@ -1,0 +1,20 @@
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+
+  # Standard (non-adaptive) icon — used on older Android (<26) and as fallback
+  image_path: "assets/icons/motonav_logo.png"
+
+  # Adaptive icon — Android 8+ (API 26+)
+  # Background: dark charcoal matching the app surface color
+  # Foreground: the logo (white circle badge with yellow chevrons)
+  min_sdk_android: 26
+  adaptive_icon_background: "#0E0E0F"
+  adaptive_icon_foreground: "assets/icons/motonav_logo.png"
+
+  web:
+    generate: false
+  windows:
+    generate: false
+  macos:
+    generate: false

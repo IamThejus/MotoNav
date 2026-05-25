@@ -1,0 +1,31 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_dynamic_calls
+    - avoid_empty_else
+    - avoid_print
+    - avoid_relative_lib_imports
+    - avoid_unnecessary_containers
+    - avoid_unused_constructor_parameters
+    - cancel_subscriptions
+    - close_sinks
+    - directives_ordering
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_single_quotes
+    - sort_child_properties_last
+    - unnecessary_await_in_return
+    - unnecessary_getters_setters
+    - use_if_null_to_convert_nulls_to_bools
+    - use_super_parameters
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  errors:
+    invalid_annotation_target: ignore
